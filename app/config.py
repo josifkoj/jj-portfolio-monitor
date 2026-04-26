@@ -66,6 +66,7 @@ def upside_color(u):
 # ── Navigation pages ─────────────────────────────────────────
 PAGES = [
     ("🏠", "Dashboard"),
+    ("🔬", "Analyzer"),
     ("📋", "Stocks to Watch"),
     ("💰", "Entry Tracker"),
     ("🔍", "Screener"),
@@ -77,5 +78,4 @@ PAGES = [
     ("🏆", "Top 10"),
     ("❌", "Rejected"),
     ("📰", "Market Pulse"),
-    ("🔬", "Analyzer"),
 ]

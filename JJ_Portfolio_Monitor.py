@@ -78,21 +78,25 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:0.58rem;color:{C.TEXT3};text-transform:uppercase;'
+        f'letter-spacing:2px;margin:14px 4px 6px">Navigation</div>',
+        unsafe_allow_html=True,
+    )
 
-    # Nav buttons
+    # Nav buttons — compact list
     for icon, name in C.PAGES:
         active = st.session_state.page == name
         if st.button(
             f"{icon}  {name}",
             key=f"nav_{name}",
             use_container_width=True,
+            type="primary" if active else "secondary",
         ):
             st.session_state.page = name
             st.session_state.selected_stock = None
             st.rerun()
 
-    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("---")
 
     # Live status strip

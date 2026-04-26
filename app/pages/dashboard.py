@@ -61,6 +61,32 @@ def render(df_main: pd.DataFrame, df_top10: pd.DataFrame, prices: dict):
     _kpi(k4, "Open Positions",    str(len(port)),    "Portfolio Simulator", C.TEXT3)
     _kpi(k5, "Universe Avg ROIC", f"{avg_roic:.1f}%","Quality compounder score", C.GREEN)
 
+    # ── Analyzer CTA ─────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    cta1, cta2 = st.columns([4, 1])
+    cta1.markdown(
+        f'<div style="background:linear-gradient(90deg,{C.GREEN_BG} 0%,{C.SURFACE} 60%);'
+        f'border:1px solid {C.GREEN}55;border-left:4px solid {C.GREEN};'
+        f'border-radius:10px;padding:18px 22px;display:flex;align-items:center;'
+        f'justify-content:space-between;height:100%">'
+        f'<div>'
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+        f'<span style="font-size:1.4rem">🔬</span>'
+        f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:1rem;'
+        f'font-weight:700;color:{C.GREEN};letter-spacing:1px">'
+        f'STOCK ANALYZER — INSTANT DEEP DIVE</span></div>'
+        f'<div style="font-size:0.8rem;color:{C.TEXT2};line-height:1.5">'
+        f'Type <b style="color:{C.GREEN}">any S&P 500 ticker</b> and get live price, ROIC, '
+        f'FCF margins, fair value, analyst targets and a quality verdict — '
+        f'auto-calculated in seconds.</div>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+    if cta2.button("🔬  Open Analyzer", use_container_width=True, key="cta_analyzer",
+                    type="primary"):
+        st.session_state.page = "Analyzer"
+        st.rerun()
+
     # ── Active alerts ────────────────────────────────────────
     if alerts:
         st.markdown("<br>", unsafe_allow_html=True)
