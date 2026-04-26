@@ -35,6 +35,7 @@ from app.pages import (
     top10,
     rejected,
     market_pulse,
+    analyzer,
 )
 
 
@@ -174,6 +175,9 @@ elif page == "Rejected":
 
 elif page == "Market Pulse":
     market_pulse.render(df_main)
+
+elif page == "Analyzer":
+    analyzer.render(df_main, prices)
 
 else:
     st.error(f"Unknown page: {page}")

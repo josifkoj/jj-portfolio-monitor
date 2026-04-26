@@ -77,4 +77,5 @@ PAGES = [
     ("🏆", "Top 10"),
     ("❌", "Rejected"),
     ("📰", "Market Pulse"),
+    ("🔬", "Analyzer"),
 ]

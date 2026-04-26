@@ -12,6 +12,7 @@ from app.pages import (
     top10,
     rejected,
     market_pulse,
+    analyzer,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "top10",
     "rejected",
     "market_pulse",
+    "analyzer",
 ]
