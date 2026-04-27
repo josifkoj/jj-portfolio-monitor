@@ -548,6 +548,14 @@ def _render_analysis(
     analyst_upside, analyst_n, analyst_rating,
     q_score, v_label, v_col, v_reason,
 ):
+    # ── Universal Stock Profile (always shown for any S&P ticker) ─────
+    _render_stock_profile(
+        ticker, df_main, roic, fcf_m, fwd_pe, eps_g,
+        q_score, v_label, v_col, v_reason,
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # ── Main 3-column layout ───────────────────────────────────
     col_q, col_v, col_a = st.columns([1, 1, 1])
 
@@ -636,26 +644,13 @@ def _render_analysis(
                           None)
             + f'<div style="margin-top:16px;padding-top:12px;border-top:1px solid {C.BORDER2}">'
             f'<div style="font-size:0.6rem;color:{C.TEXT3};text-transform:uppercase;'
-            f'letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Fair Value Estimates</div>'
-            + _metric_row("Auto FV (PEG)",
-                          fmt_price(auto_fv) if auto_fv else "—",
-                          C.GOLD, None)
-            + _metric_row("Auto Upside",
-                          fmt_pct(upside) if upside is not None else "—",
-                          C.GREEN if (upside or 0) >= 15 else C.GOLD if (upside or 0) >= 5 else C.RED,
-                          None)
-            + _metric_row("Analyst Target",
-                          fmt_price(analyst_tgt) if analyst_tgt else "—",
-                          C.BLUE, None)
-            + _metric_row("Analyst Upside",
-                          fmt_pct(analyst_upside) if analyst_upside is not None else "—",
-                          C.GREEN if (analyst_upside or 0) >= 10 else C.TEXT3, None)
+            f'letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Analyst Range</div>'
             + _metric_row("Analyst High",
                           fmt_price(analyst_high) if analyst_high else "—",
-                          C.TEXT3, None)
+                          C.GREEN, None)
             + _metric_row("Analyst Low",
                           fmt_price(analyst_low) if analyst_low else "—",
-                          C.TEXT3, None)
+                          C.RED, None)
             + (f'<div style="font-size:0.65rem;color:{C.TEXT3};margin-top:8px">'
                f'{analyst_n} analysts · consensus: '
                f'<b style="color:{C.BLUE}">{analyst_rating}</b></div>'
@@ -733,63 +728,6 @@ def _render_analysis(
                 unsafe_allow_html=True,
             )
 
-    # ── JJ Universe match ─────────────────────────────────────
-    match = df_main[df_main["Ticker"] == ticker]
-    if not match.empty:
-        r = match.iloc[0]
-        tier     = str(r.get("Tier", ""))
-        verdict  = str(r.get("Verdict", ""))
-        roic_jj  = r.get("ROIC %")
-        fcf_jj   = r.get("FCF Margin %")
-        fwdpe_jj = r.get("Fwd PE")
-        epsg_jj  = r.get("EPS Growth %")
-        tc       = C.TIER.get(tier, {})
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(section_title("🏅  JJ Research Data — This Stock Is in the Universe"),
-                    unsafe_allow_html=True)
-        st.markdown(
-            f'<div style="background:{C.SURFACE};border:1px solid {C.GREEN}33;'
-            f'border-left:4px solid {C.GREEN};border-radius:10px;padding:18px 20px">'
-            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-            f'<span style="background:{tc.get("bg",C.SURFACE2)};'
-            f'color:{tc.get("color",C.TEXT)};padding:3px 10px;border-radius:4px;'
-            f'font-size:0.7rem;font-weight:700">{tier}</span>'
-            f'<span style="font-size:0.75rem;color:{C.TEXT2}">'
-            f'JJ Research has this stock in the <b style="color:{C.GREEN}">approved universe</b>'
-            f'</span>'
-            f'</div>'
-            f'<div style="font-size:0.8rem;color:{C.TEXT};line-height:1.7;'
-            f'background:{C.SURFACE2};border-radius:6px;padding:10px 14px;margin-bottom:12px">'
-            f'<b style="color:{C.GREEN}">Verdict:</b> {verdict}</div>'
-            f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'
-            + "".join([
-                f'<div style="background:{C.SURFACE2};border-radius:6px;padding:10px">'
-                f'<div style="font-size:0.58rem;color:{C.TEXT3};text-transform:uppercase;'
-                f'letter-spacing:1px;margin-bottom:3px">{l}</div>'
-                f'<div style="font-family:\'JetBrains Mono\',monospace;color:{C.GREEN};'
-                f'font-size:0.88rem;font-weight:700">{v}</div>'
-                f'</div>'
-                for l, v in [
-                    ("ROIC %",       f"{roic_jj}%" if roic_jj != "—" else "—"),
-                    ("FCF Margin",   f"{fcf_jj}%"  if fcf_jj  != "—" else "—"),
-                    ("Fwd PE",       f"{fwdpe_jj}x" if fwdpe_jj != "—" else "—"),
-                    ("EPS Growth",   f"{epsg_jj}%"  if epsg_jj  != "—" else "—"),
-                ]
-            ])
-            + f'</div></div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<div style="font-size:0.72rem;color:{C.TEXT3};margin-top:8px;'
-            f'padding:10px 14px;background:{C.SURFACE};border-radius:6px;'
-            f'border:1px solid {C.BORDER}">'
-            f'ℹ️ <b>{ticker}</b> is not in the JJ Research universe. '
-            f'Analysis above is calculated purely from market data.</div>',
-            unsafe_allow_html=True,
-        )
-
     # ── Disclaimer ────────────────────────────────────────────
     st.markdown(
         f'<div style="font-size:0.65rem;color:{C.TEXT3};margin-top:20px;'
@@ -797,6 +735,96 @@ def _render_analysis(
         f'border:1px solid {C.BORDER}">'
         f'⚡ Data via yfinance · Price refreshes every 5 min · Fundamentals cached 1hr · '
         f'Auto FV uses PEG=1 model — not financial advice.</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# Universal Stock Profile card (works for any S&P ticker)
+# ─────────────────────────────────────────────────────────────
+
+def _auto_tier(q_score: int) -> str:
+    """Map quality score → Tier label (T1/T2/T3) for non-JJ-universe stocks."""
+    if q_score >= 70:
+        return "T1"
+    if q_score >= 50:
+        return "T2"
+    if q_score >= 30:
+        return "T3"
+    return "—"
+
+
+def _render_stock_profile(
+    ticker, df_main, roic, fcf_m, fwd_pe, eps_g,
+    q_score, v_label, v_col, v_reason,
+):
+    """Always-rendered profile card — JJ Research data if available,
+    otherwise auto-computed equivalent. Same layout for both cases."""
+    match = df_main[df_main["Ticker"] == ticker] if df_main is not None else pd.DataFrame()
+    in_universe = not match.empty
+
+    if in_universe:
+        r        = match.iloc[0]
+        tier     = str(r.get("Tier", "")) or _auto_tier(q_score)
+        verdict  = str(r.get("Verdict", "")) or v_reason
+        roic_v   = r.get("ROIC %")
+        fcf_v    = r.get("FCF Margin %")
+        fwdpe_v  = r.get("Fwd PE")
+        epsg_v   = r.get("EPS Growth %")
+        source_label = "JJ RESEARCH UNIVERSE"
+        source_col   = C.GREEN
+        source_note  = "Data sourced from JJ Research curated coverage."
+    else:
+        tier    = _auto_tier(q_score)
+        verdict = v_reason
+        roic_v  = f"{roic:.1f}" if roic is not None else "—"
+        fcf_v   = f"{fcf_m:.1f}" if fcf_m is not None else "—"
+        fwdpe_v = f"{fwd_pe:.1f}" if fwd_pe else "—"
+        epsg_v  = f"{eps_g:.1f}" if eps_g is not None else "—"
+        source_label = "AUTO-COMPUTED"
+        source_col   = C.BLUE
+        source_note  = "Computed from yfinance fundamentals (not in JJ universe)."
+
+    tc = C.TIER.get(tier, {"color": C.TEXT, "bg": C.SURFACE2})
+
+    def _kpi(label_t, value_t, accent):
+        return (
+            f'<div style="background:{C.SURFACE2};border-radius:8px;padding:12px 14px;'
+            f'border:1px solid {C.BORDER}">'
+            f'<div style="font-size:0.58rem;color:{C.TEXT3};text-transform:uppercase;'
+            f'letter-spacing:1.2px;margin-bottom:4px;font-weight:600">{label_t}</div>'
+            f'<div style="font-family:\'JetBrains Mono\',monospace;color:{accent};'
+            f'font-size:1.05rem;font-weight:700">{value_t}</div>'
+            f'</div>'
+        )
+
+    st.markdown(section_title("🏅  Stock Profile"), unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:{C.SURFACE};border:1px solid {source_col}33;'
+        f'border-left:4px solid {source_col};border-radius:12px;padding:18px 22px">'
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;'
+        f'flex-wrap:wrap">'
+        f'<span style="background:{tc.get("bg",C.SURFACE2)};'
+        f'color:{tc.get("color",C.TEXT)};padding:4px 12px;border-radius:5px;'
+        f'font-size:0.72rem;font-weight:700;letter-spacing:0.5px">TIER {tier}</span>'
+        f'<span style="background:{v_col}18;color:{v_col};padding:4px 12px;'
+        f'border-radius:5px;font-size:0.72rem;font-weight:700;letter-spacing:0.5px">'
+        f'⬡ {v_label}</span>'
+        f'<span style="background:{source_col}14;color:{source_col};padding:4px 12px;'
+        f'border-radius:5px;font-size:0.65rem;font-weight:700;letter-spacing:1px">'
+        f'{source_label}</span>'
+        f'<span style="font-size:0.7rem;color:{C.TEXT3};margin-left:auto">{source_note}</span>'
+        f'</div>'
+        f'<div style="font-size:0.82rem;color:{C.TEXT};line-height:1.7;'
+        f'background:{C.SURFACE2};border-radius:8px;padding:12px 16px;margin-bottom:14px;'
+        f'border-left:3px solid {v_col}">'
+        f'<b style="color:{v_col}">Verdict:</b> {verdict}</div>'
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'
+        + _kpi("ROIC %",     f"{roic_v}%" if roic_v not in ("—", None) else "—", C.GREEN)
+        + _kpi("FCF Margin", f"{fcf_v}%"  if fcf_v  not in ("—", None) else "—", C.TEAL)
+        + _kpi("Fwd PE",     f"{fwdpe_v}x" if fwdpe_v not in ("—", None) else "—", C.GOLD)
+        + _kpi("EPS Growth", f"{epsg_v}%"  if epsg_v  not in ("—", None) else "—", C.BLUE)
+        + f'</div></div>',
         unsafe_allow_html=True,
     )
 
