@@ -1,5 +1,6 @@
 # app/styles.py  —  Global CSS injected once at startup
-from app.config import BG, SURFACE, SURFACE2, BORDER, BORDER2, GREEN, GOLD, RED, TEXT, TEXT2, TEXT3
+from app.config import (BG, SURFACE, SURFACE2, BORDER, BORDER2,
+                        GREEN, GREEN_BG, GOLD, RED, TEXT, TEXT2, TEXT3)
 
 CSS = f"""
 <style>
@@ -42,6 +43,21 @@ html, body, [class*="css"] {{
   color: {GREEN} !important;
   background: {SURFACE} !important;
 }}
+
+/* ── Active nav button (primary type) ── */
+[data-testid="stBaseButton-primary"] {{
+  background: linear-gradient(90deg,{GREEN_BG},{SURFACE2}) !important;
+  border: 1px solid {GREEN}88 !important;
+  color: {GREEN} !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px {GREEN}33 !important;
+}}
+[data-testid="stBaseButton-primary"]:hover {{
+  background: {GREEN_BG} !important;
+  border-color: {GREEN} !important;
+  box-shadow: 0 0 14px {GREEN}55 !important;
+}}
+
 .stSelectbox > div > div,
 .stMultiSelect > div > div,
 .stNumberInput > div > div > input,

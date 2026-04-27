@@ -5,6 +5,11 @@ import yfinance as yf
 from app.data_loader import save_user_data
 
 
+def _normalize(tk: str) -> str:
+    """Yahoo Finance uses dashes not dots (e.g. BRK.B → BRK-B)."""
+    return tk.replace(".", "-")
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch_batch(tickers_tuple: tuple, _bucket: int) -> dict:
     """Download 1-day 1-min bars for all tickers in one call."""
@@ -46,9 +51,17 @@ def _fetch_batch(tickers_tuple: tuple, _bucket: int) -> dict:
 
 
 def get_prices(tickers: list) -> dict:
-    """Return price dict; merges fresh fetch with session cache fallback."""
-    bucket = int(time.time() // 300)
-    fresh  = _fetch_batch(tuple(sorted(set(tickers))), bucket)
+    """Return price dict; merges fresh fetch with session cache fallback.
+    Normalises tickers for Yahoo Finance (dots → dashes) and re-maps back.
+    """
+    bucket  = int(time.time() // 300)
+    # Build normalised → original mapping
+    mapping = {_normalize(t): t for t in tickers}
+    norm_tks = tuple(sorted(set(mapping.keys())))
+
+    fresh_norm = _fetch_batch(norm_tks, bucket)
+    # Re-map Yahoo-style keys back to original tickers
+    fresh = {mapping.get(k, k): v for k, v in fresh_norm.items()}
 
     cache = st.session_state.price_cache
     for tk, val in fresh.items():
