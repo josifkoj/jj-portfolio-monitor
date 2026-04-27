@@ -181,7 +181,7 @@ def _price_chart(hist: pd.DataFrame, fv: float | None,
         name="Price", mode="lines",
         line=dict(color=C.GREEN, width=2),
         fill="tozeroy",
-        fillcolor=f"{C.GREEN}12",
+        fillcolor=_hex_alpha(C.GREEN, "12"),
         hovertemplate="<b>%{x|%b %d %Y}</b><br>$%{y:.2f}<extra></extra>",
     ))
 
@@ -220,6 +220,12 @@ def _price_chart(hist: pd.DataFrame, fv: float | None,
     return fig
 
 
+def _hex_alpha(hex_color: str, alpha_hex: str) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{int(alpha_hex, 16)/255:.2f})"
+
+
 def _gauge_chart(score: int, col: str) -> go.Figure:
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -234,10 +240,10 @@ def _gauge_chart(score: int, col: str) -> go.Figure:
             "bgcolor": C.SURFACE2,
             "borderwidth": 0,
             "steps": [
-                {"range": [0,  30], "color": f"{C.RED}22"},
-                {"range": [30, 55], "color": f"{C.GOLD}22"},
-                {"range": [55, 75], "color": f"{C.GREEN}22"},
-                {"range": [75, 100], "color": f"{C.GREEN}44"},
+                {"range": [0,  30], "color": _hex_alpha(C.RED,   "22")},
+                {"range": [30, 55], "color": _hex_alpha(C.GOLD,  "22")},
+                {"range": [55, 75], "color": _hex_alpha(C.GREEN, "22")},
+                {"range": [75, 100], "color": _hex_alpha(C.GREEN, "44")},
             ],
             "threshold": {"line": {"color": col, "width": 2},
                           "thickness": 0.75, "value": score},
@@ -399,6 +405,41 @@ def render(df_main: pd.DataFrame, prices: dict):
     chg_col   = C.GREEN if (chg_pct or 0) >= 0 else C.RED
     pos52     = pct52(cur, low52, high52)
 
+    # ── Valuation snapshot (Price | Intrinsic Value | Analyst Tgt | Upside) ──
+    # Use auto FV as the "intrinsic value" reference. Upside chooses the better
+    # of auto-FV vs analyst target if both are present (more conservative).
+    iv_upside = upside  # PEG-based intrinsic value upside
+    # Combined upside: prefer the average if both available
+    if upside is not None and analyst_upside is not None:
+        combined_upside = round((upside + analyst_upside) / 2, 1)
+    else:
+        combined_upside = upside if upside is not None else analyst_upside
+
+    if combined_upside is None:
+        up_col = C.TEXT3
+        up_label = "—"
+        up_status = "N/A"
+    elif combined_upside >= 0:
+        up_col = C.GREEN
+        up_label = f"+{combined_upside:.1f}%"
+        up_status = "UNDERVALUED"
+    else:
+        up_col = C.RED
+        up_label = f"{combined_upside:.1f}%"
+        up_status = "OVERVALUED"
+
+    def _val_cell(label_txt: str, value_txt: str, color: str, sub: str = "") -> str:
+        return (
+            f'<div style="flex:1;padding:14px 18px;border-right:1px solid {C.BORDER}">'
+            f'<div style="font-size:0.58rem;color:{C.TEXT3};text-transform:uppercase;'
+            f'letter-spacing:1.5px;font-weight:700;margin-bottom:6px">{label_txt}</div>'
+            f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:1.35rem;'
+            f'font-weight:700;color:{color}">{value_txt}</div>'
+            + (f'<div style="font-size:0.65rem;color:{C.TEXT3};margin-top:2px">{sub}</div>'
+               if sub else "")
+            + f'</div>'
+        )
+
     # ── Company header ────────────────────────────────────────
     st.markdown(
         f'<div style="background:{C.SURFACE};border:1px solid {C.BORDER};'
@@ -448,6 +489,65 @@ def render(df_main: pd.DataFrame, prices: dict):
         unsafe_allow_html=True,
     )
 
+    # ── Valuation snapshot strip ──────────────────────────────
+    st.markdown(
+        f'<div style="background:{C.SURFACE};border:1px solid {C.BORDER};'
+        f'border-radius:12px;margin-bottom:16px;display:flex;overflow:hidden">'
+        + _val_cell("Current Price", fmt_price(cur), C.TEXT,
+                    f"{fmt_pct(chg_pct)} today" if chg_pct is not None else "")
+        + _val_cell("Intrinsic Value", fmt_price(auto_fv) if auto_fv else "—",
+                    C.GOLD, "PEG fair value model")
+        + _val_cell("Analyst Target",
+                    fmt_price(analyst_tgt) if analyst_tgt else "—",
+                    C.BLUE,
+                    f"{analyst_n} analysts · {analyst_rating}" if analyst_n else "")
+        + f'<div style="flex:1;padding:14px 18px;'
+          f'background:{up_col}14">'
+          f'<div style="font-size:0.58rem;color:{up_col};text-transform:uppercase;'
+          f'letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Upside · {up_status}</div>'
+          f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:1.35rem;'
+          f'font-weight:700;color:{up_col}">{up_label}</div>'
+          f'<div style="font-size:0.65rem;color:{C.TEXT3};margin-top:2px">'
+          f'{"Auto: "+fmt_pct(upside) if upside is not None else ""}'
+          f'{"  ·  Analyst: "+fmt_pct(analyst_upside) if analyst_upside is not None else ""}'
+          f'</div></div>'
+        + f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Top-level tabs: Analysis / How It's Calculated ────────
+    tab_analysis, tab_calc = st.tabs(["📊  Analysis", "📐  How It's Calculated"])
+
+    with tab_analysis:
+        _render_analysis(
+            ticker, df_main, hist, info, description,
+            roic, fcf_m, fcf_yield, gross_m, op_m, net_m, roe, roa,
+            rev_g, eps_g, de, current_ratio,
+            pe_ttm, fwd_pe, pb, ps, trailing_eps, fwd_eps,
+            auto_fv, upside, analyst_tgt, analyst_high, analyst_low,
+            analyst_upside, analyst_n, analyst_rating,
+            q_score, v_label, v_col, v_reason,
+        )
+
+    with tab_calc:
+        _render_calculations(
+            roic, fcf_m, gross_m, rev_g, de, q_score,
+            fwd_eps, growth_pct, auto_fv, cur, upside,
+            analyst_tgt, analyst_upside, combined_upside,
+            v_label, v_reason,
+        )
+    return
+
+
+def _render_analysis(
+    ticker, df_main, hist, info, description,
+    roic, fcf_m, fcf_yield, gross_m, op_m, net_m, roe, roa,
+    rev_g, eps_g, de, current_ratio,
+    pe_ttm, fwd_pe, pb, ps, trailing_eps, fwd_eps,
+    auto_fv, upside, analyst_tgt, analyst_high, analyst_low,
+    analyst_upside, analyst_n, analyst_rating,
+    q_score, v_label, v_col, v_reason,
+):
     # ── Main 3-column layout ───────────────────────────────────
     col_q, col_v, col_a = st.columns([1, 1, 1])
 
@@ -699,3 +799,179 @@ def render(df_main: pd.DataFrame, prices: dict):
         f'Auto FV uses PEG=1 model — not financial advice.</div>',
         unsafe_allow_html=True,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# "How It's Calculated" tab
+# ─────────────────────────────────────────────────────────────
+
+def _calc_card(title: str, body_html: str, accent: str) -> str:
+    return (
+        f'<div style="background:{C.SURFACE};border:1px solid {C.BORDER};'
+        f'border-left:3px solid {accent};border-radius:10px;'
+        f'padding:16px 20px;margin-bottom:14px">'
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;'
+        f'font-weight:700;color:{accent};text-transform:uppercase;letter-spacing:1.5px;'
+        f'margin-bottom:10px">{title}</div>'
+        f'<div style="font-size:0.82rem;color:{C.TEXT2};line-height:1.7">{body_html}</div>'
+        f'</div>'
+    )
+
+
+def _formula(text: str) -> str:
+    return (
+        f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;'
+        f'background:{C.SURFACE2};color:{C.TEXT};padding:8px 12px;border-radius:6px;'
+        f'border:1px solid {C.BORDER};margin:6px 0;display:inline-block">'
+        f'{text}</div>'
+    )
+
+
+def _render_calculations(
+    roic, fcf_m, gross_m, rev_g, de, q_score,
+    fwd_eps, growth_pct, auto_fv, cur, upside,
+    analyst_tgt, analyst_upside, combined_upside,
+    v_label, v_reason,
+):
+    st.markdown(section_title("📐  How These Numbers Were Calculated"),
+                unsafe_allow_html=True)
+
+    # Intrinsic value walkthrough
+    body_iv = (
+        "The <b>Intrinsic Value</b> uses a PEG-based fair value model — it "
+        "applies a PE multiple anchored on the company's expected growth, "
+        "then multiplies by forward EPS:"
+        + _formula("Intrinsic Value = Forward EPS × Growth-Adjusted Multiple")
+        + "<br><b>Multiple bands</b> (capped to avoid bubble valuations):"
+        + "<ul style='margin:6px 0;padding-left:22px;line-height:1.8'>"
+        + "<li>Growth ≥ 30% → multiple = min(growth × 1.4, 50)</li>"
+        + "<li>Growth 15–30% → multiple = growth × 1.8</li>"
+        + "<li>Growth &lt; 15% → multiple = max(growth × 2.2, 12)</li>"
+        + "<li>No growth data → multiple = 13 (defensive)</li>"
+        + "</ul>"
+        + f"<div style='margin-top:10px;padding:10px 12px;background:{C.SURFACE2};"
+          f"border-radius:6px;font-size:0.78rem'>"
+          f"<b style='color:{C.GOLD}'>Your stock:</b> "
+          f"Forward EPS = {fmt_price(fwd_eps) if fwd_eps else '—'} · "
+          f"Growth used = {fmt_pct(growth_pct) if growth_pct is not None else '—'} → "
+          f"<b style='color:{C.GOLD}'>Intrinsic Value = {fmt_price(auto_fv) if auto_fv else '—'}</b>"
+          f"</div>"
+    )
+
+    # Upside walkthrough
+    if combined_upside is not None:
+        verdict_color = C.GREEN if combined_upside >= 0 else C.RED
+        verdict_word  = "UNDERVALUED — green" if combined_upside >= 0 else "OVERVALUED — red"
+    else:
+        verdict_color = C.TEXT3
+        verdict_word  = "Insufficient data"
+
+    body_up = (
+        "Upside compares the current price to the fair value targets. "
+        "We average the model-based intrinsic value upside and the analyst-consensus "
+        "target upside (when both exist) for a balanced view:"
+        + _formula("Upside % = (Fair Value − Current Price) / Current Price × 100")
+        + f"<div style='margin-top:8px'>If <b style='color:{C.GREEN}'>positive</b> the "
+          f"stock is undervalued (shown <b style='color:{C.GREEN}'>green</b>); "
+          f"if <b style='color:{C.RED}'>negative</b>, overvalued "
+          f"(shown <b style='color:{C.RED}'>red</b>).</div>"
+        + f"<div style='margin-top:10px;padding:10px 12px;background:{C.SURFACE2};"
+          f"border-radius:6px;font-size:0.78rem'>"
+          f"Auto upside = {fmt_pct(upside) if upside is not None else '—'} · "
+          f"Analyst upside = {fmt_pct(analyst_upside) if analyst_upside is not None else '—'} → "
+          f"<b style='color:{verdict_color}'>Combined = "
+          f"{fmt_pct(combined_upside) if combined_upside is not None else '—'} "
+          f"({verdict_word})</b></div>"
+    )
+
+    # ROIC walkthrough
+    roic_val_str = f"{roic:.1f}%" if roic is not None else "—"
+    if roic is None:
+        roic_quality = "—"
+    elif roic >= 25:
+        roic_quality = "excellent"
+    elif roic >= 15:
+        roic_quality = "strong"
+    elif roic >= 8:
+        roic_quality = "decent"
+    else:
+        roic_quality = "weak"
+    body_roic = (
+        "Return on Invested Capital — measures profit generated per dollar of "
+        "capital deployed. Higher = stronger competitive moat."
+        + _formula("ROIC = (EBIT × (1 − tax)) / (Equity + Debt − Cash)")
+        + "We use a 21% effective tax rate (US statutory) so NOPAT ≈ EBIT × 0.79."
+        + f"<div style='margin-top:10px;padding:10px 12px;background:{C.SURFACE2};"
+          f"border-radius:6px;font-size:0.78rem'>"
+          f"<b style='color:{C.GREEN}'>Your stock:</b> ROIC = "
+          f"{roic_val_str} ({roic_quality})</div>"
+    )
+
+    # FCF Margin
+    body_fcf = (
+        "How much of revenue converts to actual cash after capex — the cleanest "
+        "profitability signal."
+        + _formula("FCF Margin = Free Cash Flow / Total Revenue × 100")
+        + f"<div style='margin-top:10px;padding:10px 12px;background:{C.SURFACE2};"
+          f"border-radius:6px;font-size:0.78rem'>"
+          f"<b style='color:{C.GREEN}'>Your stock:</b> FCF Margin = "
+          f"{f'{fcf_m:.1f}%' if fcf_m is not None else '—'}</div>"
+    )
+
+    # Quality score
+    body_qs = (
+        "A composite 0–100 score weighting five fundamental pillars. "
+        "Missing inputs receive a small neutral allowance (so unknowns don't "
+        "unfairly tank the score):"
+        + "<table style='width:100%;border-collapse:collapse;margin-top:8px;font-size:0.78rem'>"
+        + f"<tr style='border-bottom:1px solid {C.BORDER}'>"
+          f"<th style='text-align:left;padding:6px;color:{C.TEXT3};font-weight:600'>Pillar</th>"
+          f"<th style='text-align:left;padding:6px;color:{C.TEXT3};font-weight:600'>Tiers</th>"
+          f"<th style='text-align:right;padding:6px;color:{C.TEXT3};font-weight:600'>Weight</th></tr>"
+        + f"<tr><td style='padding:6px'>ROIC</td>"
+          f"<td style='padding:6px'>≥25% → 25 · ≥15% → 18 · ≥8% → 10 · else 4</td>"
+          f"<td style='text-align:right;padding:6px'>25 pts</td></tr>"
+        + f"<tr><td style='padding:6px'>FCF Margin</td>"
+          f"<td style='padding:6px'>≥25% → 20 · ≥15% → 14 · ≥8% → 8 · else 3</td>"
+          f"<td style='text-align:right;padding:6px'>20 pts</td></tr>"
+        + f"<tr><td style='padding:6px'>Gross Margin</td>"
+          f"<td style='padding:6px'>≥60% → 15 · ≥40% → 10 · ≥25% → 6 · else 2</td>"
+          f"<td style='text-align:right;padding:6px'>15 pts</td></tr>"
+        + f"<tr><td style='padding:6px'>Revenue Growth</td>"
+          f"<td style='padding:6px'>≥20% → 15 · ≥10% → 10 · ≥5% → 6 · else 2</td>"
+          f"<td style='text-align:right;padding:6px'>15 pts</td></tr>"
+        + f"<tr><td style='padding:6px'>Debt / Equity</td>"
+          f"<td style='padding:6px'>≤0.3 → 15 · ≤0.8 → 10 · ≤1.5 → 5 · else 1</td>"
+          f"<td style='text-align:right;padding:6px'>15 pts</td></tr>"
+        + "</table>"
+        + f"<div style='margin-top:10px;padding:10px 12px;background:{C.SURFACE2};"
+          f"border-radius:6px;font-size:0.78rem'>"
+          f"<b style='color:{C.GREEN}'>Your stock scores {q_score}/100</b> · "
+          f"Verdict: <b>{v_label}</b> — {v_reason}</div>"
+    )
+
+    # Verdict thresholds
+    body_verdict = (
+        "The verdict combines the quality score and intrinsic-value upside:"
+        + "<ul style='margin:8px 0;padding-left:22px;line-height:1.9'>"
+        + f"<li><b style='color:{C.GREEN}'>STRONG BUY</b> — score ≥ 72 AND upside ≥ 20%</li>"
+        + f"<li><b style='color:{C.GREEN}'>BUY CANDIDATE</b> — score ≥ 60 AND upside ≥ 10%</li>"
+        + f"<li><b style='color:{C.GOLD}'>WATCHLIST</b> — score ≥ 55 AND upside ≥ 0%</li>"
+        + f"<li><b style='color:{C.BLUE}'>HOLD / MONITOR</b> — score ≥ 42</li>"
+        + f"<li><b style='color:#FF9B3D'>WEAK — WAIT</b> — score ≥ 28</li>"
+        + f"<li><b style='color:{C.RED}'>AVOID</b> — score &lt; 28</li>"
+        + "</ul>"
+    )
+
+    st.markdown(_calc_card("💰  Intrinsic Value (PEG Fair Value)", body_iv, C.GOLD),
+                unsafe_allow_html=True)
+    st.markdown(_calc_card("📊  Upside / Over- or Under-valued", body_up, verdict_color),
+                unsafe_allow_html=True)
+    st.markdown(_calc_card("🎯  Quality Score", body_qs, C.GREEN),
+                unsafe_allow_html=True)
+    st.markdown(_calc_card("⚖️  ROIC", body_roic, C.GREEN),
+                unsafe_allow_html=True)
+    st.markdown(_calc_card("💵  FCF Margin", body_fcf, C.TEAL),
+                unsafe_allow_html=True)
+    st.markdown(_calc_card("⬡  Verdict Thresholds", body_verdict, C.BLUE),
+                unsafe_allow_html=True)
